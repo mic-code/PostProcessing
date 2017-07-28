@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Linq;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
     public class PostProcessEffectSettings : ScriptableObject
@@ -14,7 +14,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
         // This is the true state of the effect override in the stack - so you can disable a lower
         // priority effect by pushing a higher priority effect with enabled set to false.
-        public BoolParameter enabled = new BoolParameter { value = false };
+        public BoolParameter enabled = new BoolParameter { overrideState = true, value = false };
 
         internal ReadOnlyCollection<ParameterOverride> parameters;
 

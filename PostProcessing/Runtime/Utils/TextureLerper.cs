@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine.Assertions;
-using UnityEngine.Rendering;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     class TextureLerper
     {
@@ -129,8 +128,8 @@ namespace UnityEngine.Experimental.PostProcessing
                 rt = Get(format, to.width, to.height);
 
                 var sheet = m_PropertySheets.Get(m_Resources.shaders.texture2dLerp);
-                sheet.properties.SetTexture(Uniforms._To, to);
-                sheet.properties.SetFloat(Uniforms._Interp, t);
+                sheet.properties.SetTexture(ShaderIDs.To, to);
+                sheet.properties.SetFloat(ShaderIDs.Interp, t);
 
                 m_Command.BlitFullscreenTriangle(from, rt, sheet, 0);
             }

@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.Assertions;
-using UnityEngine.Rendering;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     // TODO: XMLDoc everything (?)
     // TODO: Add "keep alpha" checkbox
@@ -34,10 +33,15 @@ namespace UnityEngine.Experimental.PostProcessing
         public Fog fog;
         public Dithering dithering;
 
-        public PostProcessDebugView debugView;
+        public PostProcessMonitors monitors;
 
         [SerializeField]
         PostProcessResources m_Resources;
+
+        // UI states
+        [SerializeField] bool m_ShowDebugLayer;
+        [SerializeField] bool m_ShowToolkit;
+        [SerializeField] bool m_ShowCustomSorter;
 
         // Will stop applying post-processing effects just before color grading is applied
         // Currently used to export to exr without color grading
@@ -103,6 +107,11 @@ namespace UnityEngine.Experimental.PostProcessing
             m_LogHistogram = new LogHistogram();
             m_PropertySheetFactory = new PropertySheetFactory();
             m_TargetPool = new TargetPool();
+
+            if (monitors == null)
+                monitors = new PostProcessMonitors();
+
+            monitors.OnEnable();
 
             // Scriptable render pipelines handle their own command buffers
             if (RuntimeUtilities.scriptableRenderPipelineActive)
@@ -212,7 +221,9 @@ namespace UnityEngine.Experimental.PostProcessing
 
             m_Bundles.Clear();
             m_PropertySheetFactory.Release();
-            debugView.Release();
+
+            if (monitors != null)
+                monitors.OnDisable();
 
             // Might be an issue if several layers are blending in the same frame...
             TextureLerper.instance.Clear();
@@ -236,7 +247,6 @@ namespace UnityEngine.Experimental.PostProcessing
 
             var context = m_CurrentContext;
             var sourceFormat = m_Camera.allowHDR ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
-            int tempRt = m_TargetPool.Get();
 
             context.Reset();
             context.camera = m_Camera;
@@ -248,27 +258,92 @@ namespace UnityEngine.Experimental.PostProcessing
 
             SetupContext(context);
 
-            // We need to use the internal Blit method to copy the camera target or it'll fail on
-            // tiled GPU as it won't be able to resolve
+            // Lighting & opaque-only effects
+            int opaqueOnlyEffects = 0;
+            bool hasCustomOpaqueOnlyEffects = HasOpaqueOnlyEffects(context);
+            bool isAmbientOcclusionDeferred = ambientOcclusion.IsEnabledAndSupported(context) && ambientOcclusion.IsAmbientOnly(context);
+            bool isAmbientOcclusionOpaque = ambientOcclusion.IsEnabledAndSupported(context) && !ambientOcclusion.IsAmbientOnly(context);
+            bool isFogActive = fog.IsEnabledAndSupported(context);
 
-            RenderLightingEffects(context);
-
-            if (HasOpaqueOnlyEffects(context))
+            // Ambient-only AO is done in a separate command buffer, before reflections
+            if (isAmbientOcclusionDeferred)
             {
-                m_LegacyCmdBufferOpaque.GetTemporaryRT(tempRt, m_Camera.pixelWidth, m_Camera.pixelHeight, 24, FilterMode.Bilinear, sourceFormat);
-                m_LegacyCmdBufferOpaque.Blit(BuiltinRenderTextureType.CameraTarget, tempRt);
-                context.command = m_LegacyCmdBufferOpaque;
-                context.source = new RenderTargetIdentifier(tempRt);
-                context.destination = BuiltinRenderTextureType.CameraTarget;
-                RenderOpaqueOnly(context);
-                m_LegacyCmdBufferOpaque.ReleaseTemporaryRT(tempRt);
+                context.command = m_LegacyCmdBufferBeforeReflections;
+                ambientOcclusion.RenderAmbientOnly(context);
             }
+            else if (isAmbientOcclusionOpaque)
+            {
+                opaqueOnlyEffects++;
+            }
+            
+            opaqueOnlyEffects += isFogActive ? 1 : 0;
+            opaqueOnlyEffects += hasCustomOpaqueOnlyEffects ? 1 : 0;
+            
+            var cameraTarget = new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget);
 
-            m_LegacyCmdBuffer.GetTemporaryRT(tempRt, m_Camera.pixelWidth, m_Camera.pixelHeight, 24, FilterMode.Bilinear, sourceFormat);
-            m_LegacyCmdBuffer.Blit(BuiltinRenderTextureType.CameraTarget, tempRt);
+            if (opaqueOnlyEffects > 0)
+            {
+                var cmd = m_LegacyCmdBufferOpaque;
+                context.command = cmd;
+
+                // We need to use the internal Blit method to copy the camera target or it'll fail
+                // on tiled GPU as it won't be able to resolve
+                int tempTarget0 = m_TargetPool.Get();
+                cmd.GetTemporaryRT(tempTarget0, context.width, context.height, 24, FilterMode.Bilinear, sourceFormat);
+                cmd.Blit(cameraTarget, tempTarget0);
+                context.source = tempTarget0;
+
+                int tempTarget1 = -1;
+
+                if (opaqueOnlyEffects > 1)
+                {
+                    tempTarget1 = m_TargetPool.Get();
+                    cmd.GetTemporaryRT(tempTarget1, context.width, context.height, 24, FilterMode.Bilinear, sourceFormat);
+                    context.destination = tempTarget1;
+                }
+                else
+                {
+                    context.destination = cameraTarget;
+                }
+
+                if (isAmbientOcclusionOpaque)
+                {
+                    ambientOcclusion.RenderAfterOpaque(context);
+                    opaqueOnlyEffects--;
+                    var prevSource = context.source;
+                    context.source = context.destination;
+                    context.destination = opaqueOnlyEffects == 1 ? cameraTarget : prevSource;
+                }
+
+                // TODO: Insert SSR here
+
+                if (isFogActive)
+                {
+                    fog.Render(context);
+                    opaqueOnlyEffects--;
+                    var prevSource = context.source;
+                    context.source = context.destination;
+                    context.destination = opaqueOnlyEffects == 1 ? cameraTarget : prevSource;
+                }
+
+                if (hasCustomOpaqueOnlyEffects)
+                {
+                    RenderOpaqueOnly(context);
+                }
+
+                if (opaqueOnlyEffects > 1)
+                    cmd.ReleaseTemporaryRT(tempTarget1);
+
+                cmd.ReleaseTemporaryRT(tempTarget0);
+            }
+            
+            // Post-transparency stack
+            int tempRt = m_TargetPool.Get();
+            m_LegacyCmdBuffer.GetTemporaryRT(tempRt, context.width, context.height, 24, FilterMode.Bilinear, sourceFormat);
+            m_LegacyCmdBuffer.Blit(cameraTarget, tempRt);
             context.command = m_LegacyCmdBuffer;
             context.source = new RenderTargetIdentifier(tempRt);
-            context.destination = BuiltinRenderTextureType.CameraTarget;
+            context.destination = cameraTarget;
             Render(context);
             m_LegacyCmdBuffer.ReleaseTemporaryRT(tempRt);
         }
@@ -401,49 +476,6 @@ namespace UnityEngine.Experimental.PostProcessing
             m_SettingsUpdateNeeded = false;
         }
 
-        // Only used in vanilla render pipelines - fog & ambient occlusion
-        // Returns true if an effect was rendered in the opaque-only command buffer
-        void RenderLightingEffects(PostProcessRenderContext context)
-        {
-            // TODO: Optimize this, lots of useless passes and resolve going on here
-            //>>>
-            bool isAmbientOcclusionActive = ambientOcclusion.IsEnabledAndSupported(context);
-            bool isAmbientOcclusionDeferred = ambientOcclusion.IsAmbientOnly(context);
-            bool isFogActive = fog.IsEnabledAndSupported(context);
-
-            if (isAmbientOcclusionActive && isAmbientOcclusionDeferred)
-            {
-                context.command = m_LegacyCmdBufferBeforeReflections;
-                ambientOcclusion.RenderAmbientOnly(context);
-            }
-            else if (isAmbientOcclusionActive)
-            {
-                var cmd = m_LegacyCmdBufferOpaque;
-                int tempRt = m_TargetPool.Get();
-                cmd.GetTemporaryRT(tempRt, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
-                cmd.Blit(BuiltinRenderTextureType.CameraTarget, tempRt);
-                context.command = cmd;
-                context.source = tempRt;
-                context.destination = BuiltinRenderTextureType.CameraTarget;
-                ambientOcclusion.RenderAfterOpaque(context);
-                cmd.ReleaseTemporaryRT(tempRt);
-            }
-
-            if (isFogActive)
-            {
-                var cmd = m_LegacyCmdBufferOpaque;
-                int tempRt = m_TargetPool.Get();
-                cmd.GetTemporaryRT(tempRt, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
-                cmd.Blit(BuiltinRenderTextureType.CameraTarget, tempRt);
-                context.command = cmd;
-                context.source = tempRt;
-                context.destination = BuiltinRenderTextureType.CameraTarget;
-                fog.Render(context);
-                cmd.ReleaseTemporaryRT(tempRt);
-            }
-            //<<<
-        }
-
         // Renders before-transparent effects.
         // Make sure you check `HasOpaqueOnlyEffects()` before calling this method as it won't
         // automatically blit source into destination if no opaque effects are active.
@@ -476,6 +508,7 @@ namespace UnityEngine.Experimental.PostProcessing
                 SetupContext(context);
 
             TextureLerper.instance.BeginFrame(context);
+            var cmd = context.command;
 
             // Update & override layer settings first (volume blending) if the opaque only pass
             // hasn't been called this frame.
@@ -489,25 +522,36 @@ namespace UnityEngine.Experimental.PostProcessing
 
                 lastTarget = m_TargetPool.Get();
                 var finalDestination = context.destination;
-                context.command.GetTemporaryRT(lastTarget, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
+                cmd.GetTemporaryRT(lastTarget, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
                 context.destination = lastTarget;
                 temporalAntialiasing.Render(context);
                 context.source = lastTarget;
                 context.destination = finalDestination;
             }
 
+            bool hasBeforeStackEffects = HasActiveEffects(PostProcessEvent.BeforeStack, context);
+            bool hasAfterStackEffects = HasActiveEffects(PostProcessEvent.AfterStack, context) && !breakBeforeColorGrading;
+            bool needsFinalPass = (hasAfterStackEffects
+                || (antialiasingMode == Antialiasing.FastApproximateAntialiasing) || (antialiasingMode == Antialiasing.SubpixelMorphologicalAntialiasing && subpixelMorphologicalAntialiasing.IsSupported()))
+                && !breakBeforeColorGrading;
+
             // Right before the builtin stack
-            lastTarget = RenderInjectionPoint(PostProcessEvent.BeforeStack, context, "BeforeStack", lastTarget);
+            if (hasBeforeStackEffects)
+                lastTarget = RenderInjectionPoint(PostProcessEvent.BeforeStack, context, "BeforeStack", lastTarget);
 
             // Builtin stack
-            lastTarget = RenderBuiltins(context, lastTarget);
+            lastTarget = RenderBuiltins(context, !needsFinalPass, lastTarget);
 
             // After the builtin stack but before the final pass (before FXAA & Dithering)
-            if (!breakBeforeColorGrading)
+            if (hasAfterStackEffects)
                 lastTarget = RenderInjectionPoint(PostProcessEvent.AfterStack, context, "AfterStack", lastTarget);
 
             // And close with the final pass
-            RenderFinalPass(context, lastTarget);
+            if (needsFinalPass)
+                RenderFinalPass(context, lastTarget);
+
+            // Render debug monitors if needed
+            monitors.Render(context);
 
             TextureLerper.instance.EndFrame();
             m_SettingsUpdateNeeded = true;
@@ -515,12 +559,6 @@ namespace UnityEngine.Experimental.PostProcessing
 
         int RenderInjectionPoint(PostProcessEvent evt, PostProcessRenderContext context, string marker, int releaseTargetAfterUse = -1)
         {
-            // Make sure we have active effects in this injection point, skip it otherwise
-            bool hasActiveEffects = HasActiveEffects(evt, context);
-
-            if (!hasActiveEffects)
-                return releaseTargetAfterUse;
-
             int tempTarget = m_TargetPool.Get();
             var finalDestination = context.destination;
 
@@ -595,7 +633,7 @@ namespace UnityEngine.Experimental.PostProcessing
             cmd.EndSample(marker);
         }
 
-        int RenderBuiltins(PostProcessRenderContext context, int releaseTargetAfterUse = -1)
+        int RenderBuiltins(PostProcessRenderContext context, bool isFinalPass, int releaseTargetAfterUse = -1)
         {
             var uberSheet = context.propertySheets.Get(context.resources.shaders.uber);
             uberSheet.ClearKeywords();
@@ -606,11 +644,16 @@ namespace UnityEngine.Experimental.PostProcessing
             var cmd = context.command;
             cmd.BeginSample("BuiltinStack");
 
-            // Render to an intermediate target as this won't be the final pass
-            int tempTarget = m_TargetPool.Get();
-            cmd.GetTemporaryRT(tempTarget, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
+            int tempTarget = -1;
             var finalDestination = context.destination;
-            context.destination = tempTarget;
+
+            if (!isFinalPass)
+            {
+                // Render to an intermediate target as this won't be the final pass
+                tempTarget = m_TargetPool.Get();
+                cmd.GetTemporaryRT(tempTarget, context.width, context.height, 24, FilterMode.Bilinear, context.sourceFormat);
+                context.destination = tempTarget;
+            }
 
             // Depth of field final combination pass used to be done in Uber which led to artifacts
             // when used at the same time as Bloom (because both effects used the same source, so
@@ -627,7 +670,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
             // Uber effects
             RenderEffect<AutoExposure>(context);
-            uberSheet.properties.SetTexture(Uniforms._AutoExposureTex, context.autoExposureTexture);
+            uberSheet.properties.SetTexture(ShaderIDs.AutoExposureTex, context.autoExposureTexture);
 
             RenderEffect<ChromaticAberration>(context);
             RenderEffect<Bloom>(context);
@@ -636,8 +679,19 @@ namespace UnityEngine.Experimental.PostProcessing
 
             if (!breakBeforeColorGrading)
                 RenderEffect<ColorGrading>(context);
-            
-            cmd.BlitFullscreenTriangle(context.source, context.destination, uberSheet, 0);
+
+            int pass = 0;
+
+            if (isFinalPass)
+            {
+                uberSheet.EnableKeyword("FINALPASS");
+                dithering.Render(context);
+
+                if (context.flip && !context.isSceneView)
+                    pass = 1;
+            }
+
+            cmd.BlitFullscreenTriangle(context.source, context.destination, uberSheet, pass);
 
             context.source = context.destination;
             context.destination = finalDestination;
@@ -732,15 +786,8 @@ namespace UnityEngine.Experimental.PostProcessing
         bool ShouldGenerateLogHistogram(PostProcessRenderContext context)
         {
             bool autoExpo = GetBundle<AutoExposure>().settings.IsEnabledAndSupported(context);
-            bool debug = debugView.IsEnabledAndSupported() && debugView.lightMeter;
-            return autoExpo || debug;
-        }
-
-        // Debug view display
-        void OnGUI()
-        {
-            if (debugView.IsEnabledAndSupported())
-                debugView.OnGUI(m_CurrentContext);
+            bool lightMeter = monitors.lightMeter.IsEnabledAndSupported();
+            return autoExpo || lightMeter;
         }
     }
 }

@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 using UnityEditorInternal;
 using System.IO;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
     using SerializedBundleRef = PostProcessLayer.SerializedBundleRef;
     using EXRFlags = Texture2D.EXRFlags;
@@ -32,10 +32,9 @@ namespace UnityEditor.Experimental.PostProcessing
 
         SerializedProperty m_FogEnabled;
         SerializedProperty m_FogExcludeSkybox;
-
-        SerializedProperty m_DebugDisplay;
-        SerializedProperty m_DebugMonitor;
-        SerializedProperty m_DebugLightMeter;
+        
+        SerializedProperty m_ShowToolkit;
+        SerializedProperty m_ShowCustomSorter;
 
         Dictionary<PostProcessEvent, ReorderableList> m_CustomLists;
 
@@ -76,9 +75,8 @@ namespace UnityEditor.Experimental.PostProcessing
             m_FogEnabled = FindProperty(x => x.fog.enabled);
             m_FogExcludeSkybox = FindProperty(x => x.fog.excludeSkybox);
 
-            m_DebugDisplay = FindProperty(x => x.debugView.display);
-            m_DebugMonitor = FindProperty(x => x.debugView.monitor);
-            m_DebugLightMeter = FindProperty(x => x.debugView.lightMeter);
+            m_ShowToolkit = serializedObject.FindProperty("m_ShowToolkit");
+            m_ShowCustomSorter = serializedObject.FindProperty("m_ShowCustomSorter");
 
             // In case of domain reload, if the inspector is opened on a disabled PostProcessLayer
             // component it won't go through its OnEnable() and thus will miss bundle initialization
@@ -130,7 +128,6 @@ namespace UnityEditor.Experimental.PostProcessing
             DoAntialiasing();
             DoAmbientOcclusion(camera);
             DoFog(camera);
-            DoDebugLayer();
             DoToolkit();
             DoCustomEffectSorter();
 
@@ -154,7 +151,7 @@ namespace UnityEditor.Experimental.PostProcessing
                 var buttonRect = new Rect(fieldRect.xMax, lineRect.y, 60f, lineRect.height);
 
                 EditorGUI.PrefixLabel(labelRect, EditorUtilities.GetContent("Trigger|A transform that will act as a trigger for volume blending."));
-                m_VolumeTrigger.objectReferenceValue = (Transform)EditorGUI.ObjectField(fieldRect, m_VolumeTrigger.objectReferenceValue, typeof(Transform), false);
+                m_VolumeTrigger.objectReferenceValue = (Transform)EditorGUI.ObjectField(fieldRect, m_VolumeTrigger.objectReferenceValue, typeof(Transform), true);
                 if (GUI.Button(buttonRect, EditorUtilities.GetContent("This|Assigns the current GameObject as a trigger."), EditorStyles.miniButton))
                     m_VolumeTrigger.objectReferenceValue = m_Target.transform;
 
@@ -239,7 +236,7 @@ namespace UnityEditor.Experimental.PostProcessing
             if (camera == null || camera.actualRenderingPath != RenderingPath.DeferredShading)
                 return;
 
-            EditorGUILayout.LabelField(EditorUtilities.GetContent("Fog (Deferred)"), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorUtilities.GetContent("Deferred Fog"), EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
             {
                 EditorGUILayout.PropertyField(m_FogEnabled);
@@ -255,33 +252,12 @@ namespace UnityEditor.Experimental.PostProcessing
             EditorGUILayout.Space();
         }
 
-        void DoDebugLayer()
-        {
-            EditorGUILayout.LabelField(EditorUtilities.GetContent("Debug Layer"), EditorStyles.boldLabel);
-            EditorGUI.indentLevel++;
-            {
-                EditorGUILayout.PropertyField(m_DebugDisplay, EditorUtilities.GetContent("Display|Toggle visibility of the debug layer on & off in the Game View."));
-
-                if (m_DebugDisplay.boolValue)
-                {
-                    if (!SystemInfo.supportsComputeShaders)
-                        EditorGUILayout.HelpBox("The debug layer only works on compute-shader enabled platforms.", MessageType.Info);
-
-                    EditorGUILayout.PropertyField(m_DebugMonitor, EditorUtilities.GetContent("Monitor|The real-time monitor to display on the debug layer."));
-                    EditorGUILayout.PropertyField(m_DebugLightMeter, EditorUtilities.GetContent("HDR Light Meter|Light metering utility used to setup auto exposure. Note that it will only display correct values when using a full-HDR workflow (HDR camera, HDR/Custom color grading)."));
-                }
-            }
-            EditorGUI.indentLevel--;
-
-            EditorGUILayout.Space();
-        }
-
         void DoToolkit()
         {
             EditorUtilities.DrawSplitter();
-            GlobalSettings.showLayerToolkit = EditorUtilities.DrawHeader("Toolkit", GlobalSettings.showLayerToolkit);
+            m_ShowToolkit.boolValue = EditorUtilities.DrawHeader("Toolkit", m_ShowToolkit.boolValue);
 
-            if (GlobalSettings.showLayerToolkit)
+            if (m_ShowToolkit.boolValue)
             {
                 GUILayout.Space(2);
 
@@ -328,9 +304,9 @@ namespace UnityEditor.Experimental.PostProcessing
         void DoCustomEffectSorter()
         {
             EditorUtilities.DrawSplitter();
-            GlobalSettings.showCustomSorter = EditorUtilities.DrawHeader("Custom Effect Sorting", GlobalSettings.showCustomSorter);
+            m_ShowCustomSorter.boolValue = EditorUtilities.DrawHeader("Custom Effect Sorting", m_ShowCustomSorter.boolValue);
 
-            if (GlobalSettings.showCustomSorter)
+            if (m_ShowCustomSorter.boolValue)
             {
                 GUILayout.Space(5);
 
@@ -372,7 +348,7 @@ namespace UnityEditor.Experimental.PostProcessing
             var h = camera.pixelHeight;
 
             var texOut = new Texture2D(w, h, TextureFormat.RGBAFloat, false, true);
-            var target = RenderTexture.GetTemporary(w, h, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear, 1);
+            var target = RenderTexture.GetTemporary(w, h, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
 
             var lastActive = RenderTexture.active;
             var lastTargetSet = camera.targetTexture;

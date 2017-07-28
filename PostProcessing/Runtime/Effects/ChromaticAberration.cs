@@ -1,6 +1,6 @@
 using System;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
     [PostProcess(typeof(ChromaticAberrationRenderer), "Unity/Chromatic Aberration")]
@@ -61,8 +61,8 @@ namespace UnityEngine.Experimental.PostProcessing
                 ? "CHROMATIC_ABERRATION_LOW"
                 : "CHROMATIC_ABERRATION"
             );
-            sheet.properties.SetFloat(Uniforms._ChromaticAberration_Amount, settings.intensity * 0.05f);
-            sheet.properties.SetTexture(Uniforms._ChromaticAberration_SpectralLut, spectralLut);
+            sheet.properties.SetFloat(ShaderIDs.ChromaticAberration_Amount, settings.intensity * 0.05f);
+            sheet.properties.SetTexture(ShaderIDs.ChromaticAberration_SpectralLut, spectralLut);
         }
 
         public override void Release()

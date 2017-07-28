@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     public sealed class PostProcessProfile : ScriptableObject
     {
@@ -31,7 +31,6 @@ namespace UnityEngine.Experimental.PostProcessing
             var effect = (PostProcessEffectSettings)CreateInstance(type);
             effect.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
             effect.name = type.Name;
-            effect.enabled.overrideState = true;
             effect.enabled.value = true;
             settings.Add(effect);
             isDirty = true;
@@ -91,7 +90,7 @@ namespace UnityEngine.Experimental.PostProcessing
             return false;
         }
 
-        public bool HasSettings<T>(out T outSetting)
+        public bool TryGetSettings<T>(out T outSetting)
             where T : PostProcessEffectSettings
         {
             var type = typeof(T);

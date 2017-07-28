@@ -1,6 +1,6 @@
 using System;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     // For now and by popular request, this bloom effect is geared toward artists so they have full
     // control over how it looks at the expense of physical correctness.
@@ -85,25 +85,26 @@ namespace UnityEngine.Experimental.PostProcessing
             var sheet = context.propertySheets.Get(context.resources.shaders.bloom);
 
             // Apply auto exposure adjustment in the prefiltering pass
-            sheet.properties.SetTexture(Uniforms._AutoExposureTex, context.autoExposureTexture);
-
-            // Determine the iteration count
-            float logh = Mathf.Log(context.height, 2f) + settings.diffusion.value - 10f;
-            int logh_i = Mathf.FloorToInt(logh);
-            int iterations = Mathf.Clamp(logh_i, 1, k_MaxPyramidSize);
-            float sampleScale = 0.5f + logh - logh_i;
-            sheet.properties.SetFloat(Uniforms._SampleScale, sampleScale);
+            sheet.properties.SetTexture(ShaderIDs.AutoExposureTex, context.autoExposureTexture);
 
             // Do bloom on a half-res buffer, full-res doesn't bring much and kills performances on
             // fillrate limited platforms
             int tw = context.width / 2;
             int th = context.height / 2;
 
+            // Determine the iteration count
+            int s = Mathf.Max(tw, th);
+            float logs = Mathf.Log(s, 2f) + Mathf.Min(settings.diffusion.value, 10f) - 10f;
+            int logs_i = Mathf.FloorToInt(logs);
+            int iterations = Mathf.Clamp(logs_i, 1, k_MaxPyramidSize);
+            float sampleScale = 0.5f + logs - logs_i;
+            sheet.properties.SetFloat(ShaderIDs.SampleScale, sampleScale);
+
             // Prefiltering parameters
             float lthresh = Mathf.GammaToLinearSpace(settings.threshold.value);
             float knee = lthresh * settings.softKnee.value + 1e-5f;
             var threshold = new Vector4(lthresh, lthresh - knee, knee * 2f, 0.25f / knee);
-            sheet.properties.SetVector(Uniforms._Threshold, threshold);
+            sheet.properties.SetVector(ShaderIDs.Threshold, threshold);
             
             int qualityOffset = settings.mobileOptimized ? 1 : 0;
 
@@ -122,7 +123,8 @@ namespace UnityEngine.Experimental.PostProcessing
                 cmd.BlitFullscreenTriangle(last, mipDown, sheet, pass);
 
                 last = mipDown;
-                tw /= 2; th /= 2;
+                tw = Mathf.Max(tw / 2, 1);
+                th = Mathf.Max(th / 2, 1);
             }
 
             // Upsample
@@ -131,7 +133,7 @@ namespace UnityEngine.Experimental.PostProcessing
             {
                 int mipDown = m_Pyramid[i].down;
                 int mipUp = m_Pyramid[i].up;
-                cmd.SetGlobalTexture(Uniforms._BloomTex, mipDown);
+                cmd.SetGlobalTexture(ShaderIDs.BloomTex, mipDown);
                 cmd.BlitFullscreenTriangle(last, mipUp, sheet, (int)Pass.UpsampleTent + qualityOffset);
                 last = mipUp;
             }
@@ -149,10 +151,10 @@ namespace UnityEngine.Experimental.PostProcessing
 
             var uberSheet = context.uberSheet;
             uberSheet.EnableKeyword("BLOOM");
-            uberSheet.properties.SetVector(Uniforms._Bloom_Settings, shaderSettings);
-            uberSheet.properties.SetColor(Uniforms._Bloom_Color, settings.color.value.linear);
-            uberSheet.properties.SetTexture(Uniforms._Bloom_DirtTex, dirtTexture);
-            cmd.SetGlobalTexture(Uniforms._BloomTex, m_Pyramid[0].up);
+            uberSheet.properties.SetVector(ShaderIDs.Bloom_Settings, shaderSettings);
+            uberSheet.properties.SetColor(ShaderIDs.Bloom_Color, settings.color.value.linear);
+            uberSheet.properties.SetTexture(ShaderIDs.Bloom_DirtTex, dirtTexture);
+            cmd.SetGlobalTexture(ShaderIDs.BloomTex, m_Pyramid[0].up);
 
             // Cleanup
             for (int i = 0; i < iterations; i++)

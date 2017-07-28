@@ -1,9 +1,9 @@
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
-    static class ResourceAssetGenerator
+    static class ResourceAssetFactory
     {
 #if POSTFX_DEBUG_MENUS
         [MenuItem("Tools/Post-processing/Create Resources Asset")]

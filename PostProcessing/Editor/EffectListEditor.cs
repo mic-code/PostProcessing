@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
     sealed class EffectListEditor
     {
@@ -302,7 +302,6 @@ namespace UnityEditor.Experimental.PostProcessing
             var effect = (PostProcessEffectSettings)ScriptableObject.CreateInstance(type);
             effect.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
             effect.name = type.Name;
-            effect.enabled.overrideState = true;
             effect.enabled.value = true;
             return effect;
         }

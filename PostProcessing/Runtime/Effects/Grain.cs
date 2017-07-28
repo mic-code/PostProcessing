@@ -1,7 +1,6 @@
 using System;
-using UnityEngine.Rendering;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
     [PostProcess(typeof(GrainRenderer), "Unity/Grain")]
@@ -16,7 +15,7 @@ namespace UnityEngine.Experimental.PostProcessing
         [Range(0.3f, 3f), Tooltip("Grain particle size.")]
         public FloatParameter size = new FloatParameter { value = 1f };
 
-        [Range(0f, 1f), Tooltip("Controls the noisiness response curve based on scene luminance. Lower values mean less noise in dark areas.")]
+        [Range(0f, 1f), DisplayName("Luminance Contribution"), Tooltip("Controls the noisiness response curve based on scene luminance. Lower values mean less noise in dark areas.")]
         public FloatParameter lumContrib = new FloatParameter { value = 0.8f };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
@@ -68,7 +67,7 @@ namespace UnityEngine.Experimental.PostProcessing
             
             var sheet = context.propertySheets.Get(context.resources.shaders.grainBaker);
             sheet.properties.Clear();
-            sheet.properties.SetFloat(Uniforms._Phase, time % 10f);
+            sheet.properties.SetFloat(ShaderIDs.Phase, time % 10f);
 
             context.command.BeginSample("GrainLookup");
             context.command.BlitFullscreenTriangle(BuiltinRenderTextureType.None, m_GrainLookupRT, sheet, settings.colored.value ? 1 : 0);
@@ -77,9 +76,9 @@ namespace UnityEngine.Experimental.PostProcessing
             // Send everything to the uber shader
             var uberSheet = context.uberSheet;
             uberSheet.EnableKeyword("GRAIN");
-            uberSheet.properties.SetTexture(Uniforms._GrainTex, m_GrainLookupRT);
-            uberSheet.properties.SetVector(Uniforms._Grain_Params1, new Vector2(settings.lumContrib.value, settings.intensity.value * 20f));
-            uberSheet.properties.SetVector(Uniforms._Grain_Params2, new Vector4((float)context.width / (float)m_GrainLookupRT.width / settings.size.value, (float)context.height / (float)m_GrainLookupRT.height / settings.size.value, rndOffsetX, rndOffsetY));
+            uberSheet.properties.SetTexture(ShaderIDs.GrainTex, m_GrainLookupRT);
+            uberSheet.properties.SetVector(ShaderIDs.Grain_Params1, new Vector2(settings.lumContrib.value, settings.intensity.value * 20f));
+            uberSheet.properties.SetVector(ShaderIDs.Grain_Params2, new Vector4((float)context.width / (float)m_GrainLookupRT.width / settings.size.value, (float)context.height / (float)m_GrainLookupRT.height / settings.size.value, rndOffsetX, rndOffsetY));
         }
 
         RenderTextureFormat GetLookupFormat()

@@ -5,9 +5,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using UnityEngine.Assertions;
-using UnityEngine.Rendering;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     using SceneManagement;
     using UnityObject = UnityEngine.Object;
@@ -116,7 +115,7 @@ namespace UnityEngine.Experimental.PostProcessing
         // https://michaldrobot.com/2014/04/01/gcn-execution-patterns-in-full-screen-passes/
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, bool clear = false)
         {
-            cmd.SetGlobalTexture(Uniforms._MainTex, source);
+            cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
             cmd.SetRenderTarget(destination);
 
             if (clear)
@@ -127,7 +126,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, PropertySheet propertySheet, int pass, bool clear = false)
         {
-            cmd.SetGlobalTexture(Uniforms._MainTex, source);
+            cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
             cmd.SetRenderTarget(destination);
 
             if (clear)
@@ -138,7 +137,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, RenderTargetIdentifier depth, PropertySheet propertySheet, int pass, bool clear = false)
         {
-            cmd.SetGlobalTexture(Uniforms._MainTex, source);
+            cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
             cmd.SetRenderTarget(destination, depth);
 
             if (clear)
@@ -149,7 +148,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier[] destinations, RenderTargetIdentifier depth, PropertySheet propertySheet, int pass, bool clear = false)
         {
-            cmd.SetGlobalTexture(Uniforms._MainTex, source);
+            cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
             cmd.SetRenderTarget(destinations, depth);
 
             if (clear)
@@ -164,7 +163,7 @@ namespace UnityEngine.Experimental.PostProcessing
 
             material.SetPass(pass);
             if (source != null)
-                material.SetTexture(Uniforms._MainTex, source);
+                material.SetTexture(ShaderIDs.MainTex, source);
 
             Graphics.SetRenderTarget(destination);
             Graphics.DrawMeshNow(fullscreenTriangle, Matrix4x4.identity);

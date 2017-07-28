@@ -1,6 +1,6 @@
 using System;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
     public sealed class Fog
@@ -29,8 +29,8 @@ namespace UnityEngine.Experimental.PostProcessing
             var sheet = context.propertySheets.Get(context.resources.shaders.deferredFog);
             sheet.ClearKeywords();
             var fogColor = RuntimeUtilities.isLinearColorSpace ? RenderSettings.fogColor.linear : RenderSettings.fogColor;
-            sheet.properties.SetVector(Uniforms._FogColor, fogColor);
-            sheet.properties.SetVector(Uniforms._FogParams, new Vector3(RenderSettings.fogDensity, RenderSettings.fogStartDistance, RenderSettings.fogEndDistance));
+            sheet.properties.SetVector(ShaderIDs.FogColor, fogColor);
+            sheet.properties.SetVector(ShaderIDs.FogParams, new Vector3(RenderSettings.fogDensity, RenderSettings.fogStartDistance, RenderSettings.fogEndDistance));
 
             switch (RenderSettings.fogMode)
             {

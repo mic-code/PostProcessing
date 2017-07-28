@@ -1,6 +1,6 @@
 using System;
 
-namespace UnityEngine.Experimental.PostProcessing
+namespace UnityEngine.Rendering.PostProcessing
 {
     // This asset is used to store references to shaders and other resources we might need at
     // runtime without having to use a `Resources` folder. This allows for better memory management,
@@ -24,6 +24,9 @@ namespace UnityEngine.Experimental.PostProcessing
             public Shader uber;
             public Shader lut2DBaker;
             public Shader lightMeter;
+            public Shader gammaHistogram;
+            public Shader waveform;
+            public Shader vectorscope;
             public Shader deferredFog;
             public Shader ambientOcclusion;
         }
@@ -34,6 +37,9 @@ namespace UnityEngine.Experimental.PostProcessing
             public ComputeShader exposureHistogram;
             public ComputeShader lut3DBaker;
             public ComputeShader texture3dLerp;
+            public ComputeShader gammaHistogram;
+            public ComputeShader waveform;
+            public ComputeShader vectorscope;
         }
 
         [Serializable]

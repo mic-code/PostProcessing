@@ -1,7 +1,7 @@
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
     public static class Styling
     {
@@ -57,4 +57,4 @@ namespace UnityEditor.Experimental.PostProcessing
             preLabel = new GUIStyle("ShurikenLabel");
         }
     }
-}
+} 

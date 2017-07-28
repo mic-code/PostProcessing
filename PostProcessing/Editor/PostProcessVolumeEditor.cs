@@ -1,8 +1,8 @@
 using System.IO;
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
     [CustomEditor(typeof(PostProcessVolume))]
     public sealed class PostProcessVolumeEditor : BaseEditor<PostProcessVolume>
@@ -81,32 +81,7 @@ namespace UnityEditor.Experimental.PostProcessing
                 // scene file. If the user isn't a scene, put them in root instead.
                 var targetName = m_Target.name;
                 var scene = m_Target.gameObject.scene;
-                var path = string.Empty;
-
-                if (string.IsNullOrEmpty(scene.path))
-                {
-                    path = "Assets/";
-                }
-                else
-                {
-                    var scenePath = Path.GetDirectoryName(scene.path);
-                    var extPath = scene.name + "_Profiles";
-                    var profilePath = scenePath + "/" + extPath;
-
-                    if (!AssetDatabase.IsValidFolder(profilePath))
-                        AssetDatabase.CreateFolder(scenePath, extPath);
-
-                    path = profilePath + "/";
-                }
-
-                path += targetName + " Profile.asset";
-                path = AssetDatabase.GenerateUniqueAssetPath(path);
-                        
-                var asset = CreateInstance<PostProcessProfile>();
-                AssetDatabase.CreateAsset(asset, path);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-
+                var asset = ProfileFactory.CreatePostProcessProfile(scene, targetName);
                 m_Profile.objectReferenceValue = asset;
                 assetHasChanged = true;
             }

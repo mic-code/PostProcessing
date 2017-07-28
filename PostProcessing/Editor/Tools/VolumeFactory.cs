@@ -1,9 +1,9 @@
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
-    public static class VolumeCreator
+    public static class VolumeFactory
     {
         [MenuItem("GameObject/3D Object/Post-process Volume")]
         static void CreateVolume()

@@ -2,13 +2,13 @@ using System;
 using System.IO;
 using System.Text;
 using UnityEngine;
-using UnityEngine.Experimental.PostProcessing;
+using UnityEngine.Rendering.PostProcessing;
 
-namespace UnityEditor.Experimental.PostProcessing
+namespace UnityEditor.Rendering.PostProcessing
 {
     // CUBE lut specs:
     // http://wwwimages.adobe.com/content/dam/Adobe/en/products/speedgrade/cc/pdfs/cube-lut-specification-1.0.pdf
-    static class CubeLutAssetGenerator
+    static class CubeLutAssetFactory
     {
         const int kVersion = 1;
         const int kSize = 33;
